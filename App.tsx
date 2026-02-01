@@ -14,14 +14,29 @@ const App: React.FC = () => {
   const [showRefRegistration, setShowRefRegistration] = useState(false);
   
   // State to hold all referees including new registrations
-  const [allReferees, setAllReferees] = useState<Referee[]>(MOCK_REFEREES);
+  // Initialize from LocalStorage if available, otherwise use MOCK_REFEREES
+  const [allReferees, setAllReferees] = useState<Referee[]>(() => {
+    try {
+      const savedRefs = localStorage.getItem('soton_referees');
+      return savedRefs ? JSON.parse(savedRefs) : MOCK_REFEREES;
+    } catch (e) {
+      return MOCK_REFEREES;
+    }
+  });
+
+  // Save to LocalStorage whenever allReferees changes
+  useEffect(() => {
+    localStorage.setItem('soton_referees', JSON.stringify(allReferees));
+  }, [allReferees]);
 
   // PWA Install Prompt State
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
 
   useEffect(() => {
     const handler = (e: any) => {
+      // Prevent the mini-infobar from appearing on mobile
       e.preventDefault();
+      // Stash the event so it can be triggered later.
       setDeferredPrompt(e);
     };
 
@@ -34,8 +49,11 @@ const App: React.FC = () => {
 
   const handleInstallClick = async () => {
     if (!deferredPrompt) return;
+    // Show the install prompt
     deferredPrompt.prompt();
+    // Wait for the user to respond to the prompt
     const { outcome } = await deferredPrompt.userChoice;
+    // We've used the prompt, and can't use it again, discard it
     setDeferredPrompt(null);
   };
 
@@ -45,7 +63,13 @@ const App: React.FC = () => {
       setCurrentUser(MOCK_CLUBS[0]); // Demo: Log in as first club
       setCurrentView('dashboard');
     } else if (role === UserRole.REFEREE) {
-      setCurrentUser(allReferees[0]); 
+      // Direct login simulation (usually would be a form)
+      // Log in as the most recently registered ref if possible, or the first mock ref
+      const refereeToLogin = allReferees.length > MOCK_REFEREES.length 
+        ? allReferees[allReferees.length - 1] 
+        : allReferees[0];
+        
+      setCurrentUser(refereeToLogin); 
       setCurrentView('dashboard');
     }
   };
@@ -53,6 +77,7 @@ const App: React.FC = () => {
   const handleRefereeRegistration = (newReferee: Referee) => {
     setAllReferees(prev => [...prev, newReferee]);
     setShowRefRegistration(false);
+    // Auto login after registration
     setCurrentUser(newReferee);
     setUserRole(UserRole.REFEREE);
     setCurrentView('dashboard');
@@ -71,10 +96,13 @@ const App: React.FC = () => {
       } else if (view === 'login-club') {
           handleLogin(UserRole.CLUB);
       } else if (view === 'login-ref') {
+          // Instead of auto-login, show options or registration for this demo
+          // For demo simplicity, we split: "Login" logs in existing, "Sign Up" shows form
           setShowRefRegistration(true);
       }
   };
 
+  // Rendering logic based on view state
   const renderContent = () => {
     if (userRole === UserRole.CLUB && currentUser) {
       return <ClubDashboard club={currentUser as Club} referees={allReferees} />;
@@ -83,6 +111,7 @@ const App: React.FC = () => {
       return <RefereeDashboard referee={currentUser as Referee} />;
     }
 
+    // Landing Page
     return (
       <div className="bg-white">
         {/* Hero Section */}
@@ -118,6 +147,7 @@ const App: React.FC = () => {
                  Referee Sign Up
                </button>
                
+               {/* Install App Button - Only shows if browser supports it (Android/Desktop) */}
                {deferredPrompt && (
                  <button 
                    onClick={handleInstallClick}
@@ -188,6 +218,8 @@ const App: React.FC = () => {
   return (
     <Layout userRole={userRole} onLogout={handleLogout} onNavigate={handleNavigate}>
       {renderContent()}
+      
+      {/* Registration Modal */}
       {showRefRegistration && (
         <RefereeRegistration 
           onRegister={handleRefereeRegistration} 
